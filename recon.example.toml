@@ -1,0 +1,26 @@
+# Copy to recon.toml and edit. Every key is optional; omitted keys use the defaults shown here.
+
+[wallet]
+# Reserve wallet to pull from Etherscan (required only for `recon fetch-onchain`).
+address = ""
+chain_id = 1  # 1 = Ethereum mainnet. Etherscan V2 supports other EVM chains by id.
+
+# Only transfers of these contracts are ingested. Scam tokens often reuse symbols like "USDC",
+# so assets are identified by contract address, never by symbol.
+[[wallet.tokens]]
+symbol = "USDC"
+contract = "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+decimals = 6
+
+# Per-rail matching rules. Changing any of these changes the config fingerprint, and so the run id.
+[matching.processor]
+amount_tolerance = "0.01"  # absolute, in the asset's major units
+max_lag_hours = 72         # card/ACH settlement can legitimately take days
+
+[matching.onchain]
+amount_tolerance = "0.000001"
+max_lag_hours = 2
+
+[reserves]
+assets = []                # empty = every asset seen on the on-chain rail
+rolling_window_days = 7
