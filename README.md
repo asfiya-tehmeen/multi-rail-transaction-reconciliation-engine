@@ -67,7 +67,7 @@ python -m venv .venv
 pip install -e ".[dev]"
 
 recon demo        # generates sample data with known breaks and runs the whole pipeline offline
-pytest            # 27 tests
+pytest            # 29 tests
 ```
 
 `recon demo` produces (abridged):
@@ -152,6 +152,7 @@ Timestamps may be ISO-8601 (naive values are treated as UTC) or unix seconds.
 | `recon match [--as-of TS] [--verify]` | Reconcile. `as_of` defaults to the latest event time, not the clock, so re-runs are repeatable. |
 | `recon report [--run ID] [--out DIR]` | Write `results.csv`, `breaks.csv`, `coverage.csv`, `summary.json`. |
 | `recon trace ID [--run ID] [--json]` | Show the source records behind a result, a coverage snapshot, or an event. |
+| `recon sql QUERY_OR_FILE [--name N]` | Run read-only SQL. `sql/demo_queries.sql` has break exposure, aging, coverage trend, lineage, and idempotency queries. |
 | `recon demo [--seed N]` | Generate sample data and run everything offline (uses `data/demo/recon.db`). |
 
 Global options: `--db PATH` (default `data/recon.db`) and `--config PATH` (default `./recon.toml` if present).

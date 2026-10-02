@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sqlite3
 import sys
 from pathlib import Path
 
@@ -145,6 +146,47 @@ def cmd_trace(args, cfg: Config) -> int:
     return 0 if ok else 1
 
 
+def _named_queries(text: str) -> list[tuple[str, str]]:
+    """Split a .sql file into (name, statement) blocks, each introduced by a `-- name: <name>` line."""
+    blocks, name, lines = [], None, []
+    for line in text.splitlines():
+        if line.strip().lower().startswith("-- name:"):
+            if name and "".join(lines).strip():
+                blocks.append((name, "\n".join(lines).strip()))
+            name, lines = line.split(":", 1)[1].strip(), []
+        elif name:
+            lines.append(line)
+    if name and "".join(lines).strip():
+        blocks.append((name, "\n".join(lines).strip()))
+    return blocks
+
+
+def cmd_sql(args, cfg: Config) -> int:
+    if not args.db.exists():
+        raise FileNotFoundError(f"database not found: {args.db.as_posix()} (run `recon demo` first?)")
+    # Read-only connection: ad-hoc queries can never alter the audit trail.
+    conn = sqlite3.connect(args.db.resolve().as_uri() + "?mode=ro", uri=True)
+
+    target = Path(args.query)
+    if target.suffix == ".sql" and target.exists():
+        queries = _named_queries(target.read_text(encoding="utf-8"))
+        if args.name:
+            queries = [(n, q) for n, q in queries if args.name.lower() in n.lower()]
+            if not queries:
+                raise LookupError(f"no query named like {args.name!r} in {target.as_posix()}")
+    else:
+        queries = [("query", args.query)]
+
+    for name, query in queries:
+        cur = conn.execute(query)
+        headers = [d[0] for d in cur.description or []]
+        rows = [list(r) for r in cur.fetchall()]
+        print(f"\n== {name}" + ("" if args.no_echo else f"\n{query}\n"))
+        print(_table(rows, headers) if headers else "(no result set)")
+        print(f"({len(rows)} rows)")
+    return 0
+
+
 def cmd_demo(args, cfg: Config) -> int:
     out = Path(args.out)
     manifest = sample_data.generate(out, seed=args.seed)
@@ -214,6 +256,12 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--json", action="store_true")
     s.set_defaults(func=cmd_trace)
 
+    s = sub.add_parser("sql", help="run read-only SQL against the database (a query string or a .sql file)")
+    s.add_argument("query", help="SQL text, or path to a .sql file of `-- name:` blocks")
+    s.add_argument("--name", help="run only the block(s) whose name contains this text")
+    s.add_argument("--no-echo", action="store_true", help="don't print the SQL before its result")
+    s.set_defaults(func=cmd_sql)
+
     s = sub.add_parser("demo", help="generate sample data and run the full pipeline offline")
     s.add_argument("--seed", type=int, default=7)
     s.add_argument("--out", default="data/sample")
@@ -229,7 +277,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         cfg = load_config(args.config)
         return args.func(args, cfg)
-    except (RuntimeError, LookupError, ValueError, FileNotFoundError) as exc:
+    except (RuntimeError, LookupError, ValueError, FileNotFoundError, sqlite3.Error) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
 
